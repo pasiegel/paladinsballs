@@ -5,23 +5,23 @@ on:
     # Run every 3 hours
     - cron: '0 */3 * * *'
   workflow_dispatch: # Allow manual trigger
-  push:
-    branches: [ main ]
+  # REMOVED: 'push: { branches: [ main ] }'
+  # This was causing your workflow to run in a loop.
+  # The workflow runs, pushes a commit, and that push triggers the workflow again.
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     
-    # ---------------------------------
-    # --- ADD THIS PERMISSIONS BLOCK ---
     permissions:
-      contents: write
-    # ---------------------------------
+      contents: write # Needed to push back to the repo
       
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
-      
+      uses: actions/checkout@v4 # <-- UPDATED to v4
+      with:
+        fetch-depth: 0 # <-- ADDED: Disables shallow clone, gets full history
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -41,9 +41,16 @@ jobs:
         git config --global user.email 'action@github.com'
         git add golden_tee_leaderboard.json
         
-        # This is a slightly cleaner way to check for changes
+        # Check if there are any staged changes
         if ! git diff --staged --quiet; then
+          echo "Changes detected. Committing and pushing..."
           git commit -m "Update leaderboard data - $(date)"
+          
+          # --- THE FIX ---
+          # Pull remote changes (if any) and rebase your commit on top
+          git pull --rebase
+          
+          # Now push your rebased commit
           git push
         else
           echo "No changes to commit"
